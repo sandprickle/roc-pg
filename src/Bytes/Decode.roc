@@ -1,232 +1,163 @@
-module [
-    Decode,
-    Step,
-    await,
-    bool,
-    c_str,
-    decode,
-    fail,
-    i16,
-    i32,
-    i64,
-    i8,
-    loop,
-    map,
-    succeed,
-    take,
-    u16,
-    u32,
-    u64,
-    u8,
-]
+Decode(value, err) :: List(U8) -> Try(
+	{
+		decoded : value,
+		remaining : List(U8),
+	},
+	err,
+).{
+	decode : List(U8), Decode(value, err) -> Try(value, err)
+	decode = |bytes, Decode.(decode_decoder)|
+		decode_decoder(bytes).map_ok(|ok| ok.decoded)
 
-Decode value err :=
-    List U8
-    -> Result
-        {
-            decoded : value,
-            remaining : List U8,
-        }
-        err
+	# Unsigned Integers
 
-decode : List U8, Decode value err -> Result value err
-decode = |bytes, @Decode(decode_decoder)|
-    decode_decoder(bytes)
-    |> Result.map_ok(.decoded)
+	u8 : Decode(U8, [UnexpectedEnd, ..])
+	u8 = Decode.(
+		|bytes| match bytes {
+			[byte, ..] => Ok({ decoded: byte, remaining: bytes.drop_first(1) })
+			_ => Err(UnexpectedEnd)
+		},
+	)
 
-# Unsigned Integers
+	u16 : Decode(U16, [UnexpectedEnd, ..])
+	u16 = Decode.(
+		|bytes| match bytes {
+			[b0, b1, ..] => Ok(
+				{
+					decoded: b0.to_u16().shift_left_by(8).bitwise_or(b1.to_u16()),
+					remaining: bytes.drop_first(2),
+				},
+			)
+			_ => Err(UnexpectedEnd)
+		},
+	)
 
-u8 : Decode U8 [UnexpectedEnd]
-u8 =
-    @Decode(
-        |bytes|
-            when bytes is
-                [byte, ..] ->
-                    Ok({ decoded: byte, remaining: List.drop_first(bytes, 1) })
+	u32 : Decode(U32, [UnexpectedEnd, ..])
+	u32 = Decode.(
+		|bytes| match bytes {
+			[b0, b1, b2, b3, ..] => Ok(
+				{
+					decoded: b0.to_u32().shift_left_by(24)
+						.bitwise_or(b1.to_u32().shift_left_by(16))
+						.bitwise_or(b2.to_u32().shift_left_by(8))
+						.bitwise_or(b3.to_u32()),
+					remaining: bytes.drop_first(4),
+				},
+			)
+			_ => Err(UnexpectedEnd)
+		},
+	)
 
-                _ ->
-                    Err(UnexpectedEnd),
-    )
+	u64 : Decode(U64, [UnexpectedEnd, ..])
+	u64 = Decode.(
+		|bytes| match bytes {
+			[b0, b1, b2, b3, b4, b5, b6, b7, ..] => Ok(
+				{
+					decoded: b0.to_u64().shift_left_by(56)
+						.bitwise_or(b1.to_u64().shift_left_by(48))
+						.bitwise_or(b2.to_u64().shift_left_by(40))
+						.bitwise_or(b3.to_u64().shift_left_by(32))
+						.bitwise_or(b4.to_u64().shift_left_by(24))
+						.bitwise_or(b5.to_u64().shift_left_by(16))
+						.bitwise_or(b6.to_u64().shift_left_by(8))
+						.bitwise_or(b7.to_u64()),
+					remaining: bytes.drop_first(8),
+				},
+			)
+			_ => Err(UnexpectedEnd)
+		},
+	)
 
-u16 : Decode U16 [UnexpectedEnd]
-u16 =
-    @Decode(
-        |bytes|
-            when bytes is
-                [b0, b1, ..] ->
-                    value =
-                        Num.shift_left_by(Num.to_u16(b0), 8)
-                        |> Num.bitwise_or(Num.to_u16(b1))
+	# Signed Integers
 
-                    Ok({ decoded: value, remaining: List.drop_first(bytes, 2) })
+	i8 : Decode(I8, [UnexpectedEnd, ..])
+	i8 = map(u8, U8.to_i8_wrap)
 
-                _ ->
-                    Err(UnexpectedEnd),
-    )
+	i16 : Decode(I16, [UnexpectedEnd, ..])
+	i16 = map(u16, U16.to_i16_wrap)
 
-u32 : Decode U32 [UnexpectedEnd]
-u32 =
-    @Decode(
-        |bytes|
-            when bytes is
-                [b0, b1, b2, b3, ..] ->
-                    value =
-                        Num.shift_left_by(Num.to_u32(b0), 24)
-                        |> Num.bitwise_or(Num.shift_left_by(Num.to_u32(b1), 16))
-                        |> Num.bitwise_or(Num.shift_left_by(Num.to_u32(b2), 8))
-                        |> Num.bitwise_or(Num.to_u32(b3))
+	i32 : Decode(I32, [UnexpectedEnd, ..])
+	i32 = map(u32, U32.to_i32_wrap)
 
-                    Ok({ decoded: value, remaining: List.drop_first(bytes, 4) })
+	i64 : Decode(I64, [UnexpectedEnd, ..])
+	i64 = map(u64, U64.to_i64_wrap)
 
-                _ ->
-                    Err(UnexpectedEnd),
-    )
+	take : U64, (List(U8) -> value) -> Decode(value, [UnexpectedEnd, ..])
+	take = |count, callback| Decode.(
+		|bytes| {
+			{ before, others } = bytes.split_at(count)
+			if before.len() == count
+				Ok({ decoded: callback(before), remaining: others })
+			else
+				Err(UnexpectedEnd)
+		},
+	)
 
-u64 : Decode U64 [UnexpectedEnd]
-u64 =
-    @Decode(
-        |bytes|
-            when bytes is
-                [b0, b1, b2, b3, b4, b5, b6, b7, ..] ->
-                    value =
-                        Num.shift_left_by(Num.to_u64(b0), 56)
-                        |> Num.bitwise_or(Num.shift_left_by(Num.to_u64(b1), 48))
-                        |> Num.bitwise_or(Num.shift_left_by(Num.to_u64(b2), 40))
-                        |> Num.bitwise_or(Num.shift_left_by(Num.to_u64(b3), 32))
-                        |> Num.bitwise_or(Num.shift_left_by(Num.to_u64(b4), 24))
-                        |> Num.bitwise_or(Num.shift_left_by(Num.to_u64(b5), 16))
-                        |> Num.bitwise_or(Num.shift_left_by(Num.to_u64(b6), 8))
-                        |> Num.bitwise_or(Num.to_u64(b7))
+	# Strings
 
-                    Ok({ decoded: value, remaining: List.drop_first(bytes, 8) })
+	c_str : Decode(Str, [TerminatorNotFound, Utf8DecodeError(_), ..])
+	c_str = Decode.(
+		|bytes| match bytes.split_first(0) {
+			Ok({ before, after }) => match Str.from_utf8(before) {
+				Ok(value) => Ok({ decoded: value, remaining: after })
+				Err(err) => Err(Utf8DecodeError(err))
+			}
+			Err(_) => Err(TerminatorNotFound)
+		},
+	)
 
-                _ ->
-                    Err(UnexpectedEnd),
-    )
+	# Bools
 
-# Signed Integers
+	bool : Decode(Bool, [UnexpectedEnd, ..])
+	bool = Decode.(
+		|bytes| match bytes {
+			[byte, ..] => Ok({ decoded: byte == 1, remaining: bytes.drop_first(1) })
+			_ => Err(UnexpectedEnd)
+		},
+	)
 
-i8 : Decode I8 [UnexpectedEnd]
-i8 =
-    map(u8, Num.to_i8)
+	succeed : value -> Decode(value, err)
+	succeed = |value| Decode.(|bytes| Ok({ decoded: value, remaining: bytes }))
 
-i16 : Decode I16 [UnexpectedEnd]
-i16 =
-    map(u16, Num.to_i16)
+	fail : err -> Decode(value, err)
+	fail = |err| Decode.(|_| Err(err))
 
-i32 : Decode I32 [UnexpectedEnd]
-i32 =
-    map(u32, Num.to_i32)
+	await : Decode(a, err), (a -> Decode(b, err)) -> Decode(b, err)
+	await = |Decode.(decoder_a), callback| Decode.(
+		|bytes| {
+			a = decoder_a(bytes)?
+			# TODO: Decode.(decoder_b) = callback(a.decoded) should work
+			match callback(a.decoded) {
+				Decode.(decoder_b) => decoder_b(a.remaining)
+			}
+		},
+	)
 
-i64 : Decode I64 [UnexpectedEnd]
-i64 =
-    map(u64, Num.to_i64)
+	map : Decode(a, err), (a -> b) -> Decode(b, err)
+	map = |Decode.(map_decoder), map_fn| Decode.(
+		|bytes| map_decoder(bytes).map_ok(
+			|{ decoded, remaining }| { decoded: map_fn(decoded), remaining },
+		),
+	)
 
-take : U64, (List U8 -> value) -> Decode value [UnexpectedEnd]
-take = |count, callback|
-    @Decode(
-        |bytes|
-            { before, others } = List.split_at(bytes, count)
+	# Loop
 
-            if List.len(before) == count then
-                Ok({ decoded: callback(before), remaining: others })
-            else
-                Err(UnexpectedEnd),
-    )
+	Step(state, a) : [Loop(state), Done(a)]
 
-# Strings
+	loop : state, (state -> Decode(Step(state, a), err)) -> Decode(a, err)
+	loop = |state, step| Decode.(|bytes| loop_help(step, state, bytes))
 
-c_str : Decode Str [TerminatorNotFound, Utf8DecodeError _]
-c_str =
-    @Decode(
-        |bytes|
-            when List.split_first(bytes, 0) is
-                Ok({ before, after }) ->
-                    when Str.from_utf8(before) is
-                        Ok(value) ->
-                            Ok({ decoded: value, remaining: after })
-
-                        Err(err) ->
-                            Err(Utf8DecodeError(err))
-
-                Err(_) ->
-                    Err(TerminatorNotFound),
-    )
-
-# Bools
-
-bool : Decode Bool [UnexpectedEnd]
-bool =
-    @Decode(
-        |bytes|
-            when bytes is
-                [byte, ..] ->
-                    Ok({ decoded: byte == 1, remaining: List.drop_first(bytes, 1) })
-
-                _ ->
-                    Err(UnexpectedEnd),
-    )
-
-# Mapping
-
-succeed : value -> Decode value err
-succeed = |value|
-    @Decode(
-        |bytes|
-            Ok({ decoded: value, remaining: bytes }),
-    )
-
-fail : err -> Decode value err
-fail = |err|
-    @Decode(
-        |_|
-            Err(err),
-    )
-
-await : Decode a err, (a -> Decode b err) -> Decode b err
-await = |@Decode(decoder_a), callback|
-    @Decode(
-        |bytes|
-            Result.try(
-                decoder_a(bytes),
-                |a|
-                    @Decode(decoder_b) = callback(a.decoded)
-                    decoder_b(a.remaining),
-            ),
-    )
-
-map : Decode a err, (a -> b) -> Decode b err
-map = |@Decode(map_decoder), map_fn|
-    @Decode(
-        |bytes|
-            Result.map_ok(
-                map_decoder(bytes),
-                |{ decoded, remaining }|
-                    { decoded: map_fn(decoded), remaining },
-            ),
-    )
-
-# Loop
-
-Step state a : [Loop state, Done a]
-
-loop : state, (state -> Decode (Step state a) err) -> Decode a err
-loop = |state, step|
-    @Decode(
-        |bytes|
-            loop_help(step, state, bytes),
-    )
-
-loop_help = |step, state, bytes|
-    @Decode(loop_help_decoder) = step(state)
-
-    Result.try(
-        loop_help_decoder(bytes),
-        |{ decoded, remaining }|
-            when decoded is
-                Loop(new_state) ->
-                    loop_help(step, new_state, remaining)
-
-                Done(result) ->
-                    Ok({ decoded: result, remaining }),
-    )
+	loop_help = |step, state, bytes|
+	# TODO: Destructuring return value of step(state) should work
+		match step(state) {
+			Decode.(loop_help_decoder) => {
+				{ decoded, remaining } = loop_help_decoder(bytes)?
+				match decoded {
+					Loop(new_state) =>
+						loop_help(step, new_state, remaining)
+					Done(result) =>
+						Ok({ decoded: result, remaining })
+					}
+			}
+		}
+}
