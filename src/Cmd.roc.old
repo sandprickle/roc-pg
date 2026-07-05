@@ -147,4 +147,3 @@ encode_single = |binding|
                 value: Value(Str.to_utf8(value)),
                 format: Text,
             }
-
