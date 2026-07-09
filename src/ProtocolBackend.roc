@@ -140,8 +140,7 @@ notice_response = Decode.await(
 
 # TODO
 error_response : Decode(Message, _)
-error_response = Decode.await(
-	known_str_fields,
+error_response = known_str_fields.await(
 	|dict| 'S'->required_field(
 		dict,
 		|localized_severity| 'V'->optional_field_with(
@@ -269,7 +268,7 @@ parameter_field = Decode.await(
 )
 
 row_description : Decode(Message, _)
-row_description = 
+row_description =
 	Decode.await(
 		Decode.i16,
 		|field_count|
@@ -277,22 +276,15 @@ row_description =
 	)
 
 row_field : Decode(RowField, _)
-row_field = Decode.await(
-	Decode.c_str,
-	|name| Decode.await(
-		Decode.i32,
-		|table_oid| Decode.await(
-			Decode.i16,
-			|attribute_number| Decode.await(
-				Decode.i32,
-				|data_type_oid| Decode.await(
-					Decode.i16,
-					|data_type_size| Decode.await(
-						Decode.i32,
-						|type_modifier| Decode.map(
-							Decode.i16,
+row_field = Decode.c_str.await(
+	|name| Decode.i32.await(
+		|table_oid| Decode.i16.await(
+			|attribute_number| Decode.i32.await(
+				|data_type_oid| Decode.i16.await(
+					|data_type_size| Decode.i32.await(
+						|type_modifier| Decode.i16.map(
 							|format_code| {
-								column = 
+								column =
 									if table_oid != 0 and attribute_number != 0
 										Ok({ table_oid, attribute_number })
 									else
@@ -347,8 +339,7 @@ fixed_list = |count, item_decode| Decode.loop(
 )
 
 command_complete : Decode(Message, _)
-command_complete = 
-	Decode.map(Decode.c_str, |_| CommandComplete)
+command_complete = Decode.map(Decode.c_str, |_| CommandComplete)
 
 Msg : []
 
