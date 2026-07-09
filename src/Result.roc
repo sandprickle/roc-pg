@@ -1,4 +1,5 @@
 import ProtocolBackend
+import Util exposing [map_try]
 
 Result :: {
 	fields : List(RowField),
@@ -20,8 +21,7 @@ Result :: {
 	len = |Result.(result)| result.rows.len()
 
 	Decode(a, err) :: List(RowField) -> Try(
-		# TODO: should have `..err` formatter removes it
-		(List(List(U8)) -> Try(a, [FieldNotFound(Str), ..err])),
+		List(List(U8)) -> Try(a, [FieldNotFound(Str), ..err]),
 		[FieldNotFound(Str)],
 	)
 
@@ -74,43 +74,6 @@ Result :: {
 	result_with = |a, b| map2(a, b, |fn, val| fn(val))
 
 	apply = |a| |fn| result_with(fn, a)
-
-	## Use with Roc's [Record Builder](https://www.roc-lang.org/tutorial#record-builder)
-	## syntax to build records of your returned rows:
-	##
-	## ```
-	## Pg.Cmd.expect_n(
-	##     { Pg.Result.combine <-
-	##         name: Pg.Result.str("name"),
-	##         age: Pg.Result.u8("age"),
-	##     },
-	## )
-	## ```
-	# NOTE: `combine` is an alias of `map2` simply to increase its
-	# discoverability and user-friendliness for its intended use-case.
-	combine = map2
-}
-
-map_try : List(a), (a -> Try(b, err)) -> Try(List(b), err)
-map_try = |input, fn| {
-	var $mapped = []
-	for x in input {
-		match fn(x) {
-			Ok(y) => {
-				$mapped = $mapped.append(y)
-			}
-			Err(err) => return Err(err)
-		}
-	}
-	Ok($mapped)
-}
-
-try : Try(a, err), (a -> Try(b, err)) -> Try(b, err)
-try = |try_a, fn| {
-	match try_a {
-		Ok(a) => fn(a)
-		Err(err) => Err(err)
-	}
 }
 
 decoder = |fn| |name| Decode.(
@@ -131,19 +94,15 @@ decoder = |fn| |name| Decode.(
 )
 
 map2 = |Decode.(a), Decode.(b), cb| Decode.(
-	|row_fields| try(
-		a(row_fields),
-		|decode_a| try(
-			b(row_fields),
-			|decode_b| Ok(
-				|row| try(
-					decode_a(row),
-					|value_a| try(
-						decode_b(row),
-						|value_b| Ok(cb(value_a, value_b)),
-					),
-				),
-			),
-		),
-	),
+	|row_fields| {
+		decode_a = a(row_fields)?
+		decode_b = b(row_fields)?
+		Ok(
+			|row| {
+				value_a = decode_a(row)?
+				value_b = decode_b(row)?
+				Ok(cb(value_a, value_b))
+			},
+		)
+	},
 )
