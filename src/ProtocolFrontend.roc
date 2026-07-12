@@ -32,6 +32,14 @@ ProtocolFrontend :: [].{
 		name : Str, # optional
 		param_type_ids : List(I32), # optional
 	} -> List(U8)
+	parse = |{ sql, name, param_type_ids }| message(
+		'P',
+		[
+			Encode.c_str(name),
+			Encode.c_str(sql),
+			array(param_type_ids, Encode.i32),
+		],
+	)
 
 	bind :
 		{
@@ -41,14 +49,66 @@ ProtocolFrontend :: [].{
 			param_values : List([Null, Value(List(U8))]),
 			column_format_codes : List(FormatCode), # optional
 		} -> List(U8)
+	bind = |
+		{
+			portal,
+			prepared_statement,
+			format_codes,
+			param_values,
+			column_format_codes,
+		},
+	| message(
+		'B',
+		[
+			Encode.c_str(portal),
+			Encode.c_str(prepared_statement),
+			array(format_codes, format_code),
+			array(
+				param_values,
+				|value| match value {
+					Null => Encode.i32(-1)
+					Value(b) => bytes(b)
+				},
+			),
+			array(column_format_codes, format_code),
+		],
+	)
 
-	# describe_portal : { name ?? Str } -> List U8
+	describe_portal : Str -> List(U8)
+	describe_portal = |name| message('D', [Encode.u8('P'), Encode.c_str(name)])
 
-	# describe_statement : { name ?? Str } -> List U8
+	describe_statement : Str -> List(U8)
+	describe_statement = |name| message(
+		'D',
+		[
+			Encode.u8('S'),
+			Encode.c_str(name),
+		],
+	)
 
-	# execute : { portal ?? Str, limit ?? [None, Limit I32] } -> List U8
+	execute : { portal : Str, limit : [None, Limit(I32)] } -> List(U8)
+	execute = |{ portal, limit }| {
+		limit_or_zero = match limit {
+			None => 0
+			Limit(n) => n
+		}
+		message(
+			'E',
+			[
+				Encode.c_str(portal),
+				Encode.i32(limit_or_zero),
+			],
+		)
+	}
 
-	# close_statement : { name : Str } -> List U8
+	close_statement : Str -> List(U8)
+	close_statement = |name| message(
+		'C',
+		[
+			Encode.u8('S'),
+			Encode.c_str(name),
+		],
+	)
 
 	sync : List(U8)
 	sync = message('S', [])
