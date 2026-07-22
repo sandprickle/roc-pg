@@ -74,6 +74,20 @@ Result :: {
 	result_with = |a, b| map2(a, b, |fn, val| fn(val))
 
 	apply = |a| |fn| result_with(fn, a)
+
+	map2 = |Decode.(a), Decode.(b), cb| Decode.(
+		|row_fields| {
+			decode_a = a(row_fields)?
+			decode_b = b(row_fields)?
+			Ok(
+				|row| {
+					value_a = decode_a(row)?
+					value_b = decode_b(row)?
+					Ok(cb(value_a, value_b))
+				},
+			)
+		},
+	)
 }
 
 decoder = |fn| |name| Decode.(
@@ -91,18 +105,4 @@ decoder = |fn| |name| Decode.(
 
 			Err(NotFound) => Err(FieldNotFound(name))
 		},
-)
-
-map2 = |Decode.(a), Decode.(b), cb| Decode.(
-	|row_fields| {
-		decode_a = a(row_fields)?
-		decode_b = b(row_fields)?
-		Ok(
-			|row| {
-				value_a = decode_a(row)?
-				value_b = decode_b(row)?
-				Ok(cb(value_a, value_b))
-			},
-		)
-	},
 )

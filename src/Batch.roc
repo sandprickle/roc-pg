@@ -5,10 +5,7 @@ import Util exposing [map_try]
 Batch(a, err) :: Params(
 	{
 		decode : List(Result) -> Try(
-			{
-				value : a,
-				rest : List(Result),
-			},
+			{ value : a, rest : List(Result) },
 			[
 				MissingCmdResult(U64),
 				ExpectErr(err),
@@ -36,7 +33,7 @@ Batch(a, err) :: Params(
 		commands = batch.commands.append(new_cmd)
 
 		decode = |results| {
-			{ value: fn, rest } = batch.decode(results)?
+			{ value: fn, rest } = (batch.decode)(results)?
 
 			match rest {
 				[next, ..] => {
@@ -67,12 +64,13 @@ Batch(a, err) :: Params(
 			},
 		)
 
-		decode = |results| List.map2(
-			results,
-			cmds,
-			Cmd.decode,
-		)->map_try(|r| r)
-			.map_ok(|value| { value, rest: [] })
+		decode = |results| (
+			List.map2(
+				results,
+				cmds,
+				Cmd.decode,
+			)->map_try(|r| r),
+		).map_ok(|value| { value, rest: [] })
 			.map_err(|e| ExpectErr(e))
 
 		Batch.(
@@ -84,7 +82,7 @@ Batch(a, err) :: Params(
 		)
 	}
 
-	params : Batch(a, err) -> Params(_)
+	# params : Batch(a, err) -> _
 	params = |Batch.(batch)| batch
 }
 
@@ -99,7 +97,7 @@ SeenSql : Dict(Str, { index : U64, reused : Bool })
 smallest : num, num -> num
 	where [
 		num.is_lt : num, num -> Bool,
-		num.from_numeral : Numeral -> Try(num, [InvalidNumeral(Str)]),
+		num.from_numeral : Numeral -> Try(num, [InvalidNumeral(Str), ..]),
 	]
 smallest = |a, b| if a < b a else b
 

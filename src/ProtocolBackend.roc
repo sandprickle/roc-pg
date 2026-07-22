@@ -41,8 +41,7 @@ ProtocolBackend := [].{
 		ParameterDescription(List(ParameterField)),
 		DataRow(List(List(U8))),
 		PortalSuspended,
-		CommandComplete,
-		Str,
+		CommandComplete(Str),
 		EmptyQueryResponse,
 		CloseComplete,
 	]
@@ -156,28 +155,26 @@ error_response = known_str_fields.await(
 						|position| 'p'->optional_field_with(
 							dict,
 							U32.from_str,
-							|internal_position| ErrorResponse(
-								{
-									localized_severity,
-									severity,
-									code,
-									message: msg,
-									detail: 'D'->optional_field(dict),
-									hint: 'H'->optional_field(dict),
-									position,
-									internal_position,
-									internal_query: 'q'->optional_field(dict),
-									ewhere: 'W'->optional_field(dict),
-									schema_name: 's'->optional_field(dict),
-									table_name: 't'->optional_field(dict),
-									column_name: 'c'->optional_field(dict),
-									data_type_name: 'd'->optional_field(dict),
-									constraint_name: 'n'->optional_field(dict),
-									file: 'F'->optional_field(dict),
-									line: 'L'->optional_field(dict),
-									routine: 'R'->optional_field(dict),
-								},
-							)->Decode.succeed(),
+							|internal_position| ErrorResponse({
+								localized_severity,
+								severity,
+								code,
+								message: msg,
+								detail: 'D'->optional_field(dict),
+								hint: 'H'->optional_field(dict),
+								position,
+								internal_position,
+								internal_query: 'q'->optional_field(dict),
+								ewhere: 'W'->optional_field(dict),
+								schema_name: 's'->optional_field(dict),
+								table_name: 't'->optional_field(dict),
+								column_name: 'c'->optional_field(dict),
+								data_type_name: 'd'->optional_field(dict),
+								constraint_name: 'n'->optional_field(dict),
+								file: 'F'->optional_field(dict),
+								line: 'L'->optional_field(dict),
+								routine: 'R'->optional_field(dict),
+							})->Decode.succeed(),
 						),
 					),
 				),
@@ -268,7 +265,7 @@ parameter_field = Decode.await(
 )
 
 row_description : Decode(Message, _)
-row_description =
+row_description = 
 	Decode.await(
 		Decode.i16,
 		|field_count|
@@ -284,7 +281,7 @@ row_field = Decode.c_str.await(
 					|data_type_size| Decode.i32.await(
 						|type_modifier| Decode.i16.map(
 							|format_code| {
-								column =
+								column = 
 									if table_oid != 0 and attribute_number != 0
 										Ok({ table_oid, attribute_number })
 									else
@@ -339,7 +336,7 @@ fixed_list = |count, item_decode| Decode.loop(
 )
 
 command_complete : Decode(Message, _)
-command_complete = Decode.map(Decode.c_str, |_| CommandComplete)
+command_complete = Decode.map(Decode.c_str, |str| CommandComplete(str))
 
 Msg : []
 

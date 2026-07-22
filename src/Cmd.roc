@@ -59,7 +59,7 @@ Cmd(a, err) :: Params({ decode : Result -> Try(a, err) }, []).{
 	with_limit = |Cmd.(cmd), limit| Cmd.({ ..cmd, limit: Limit(limit) })
 
 	decode : Result, Cmd(a, err) -> Try(a, err)
-	decode = |result, Cmd.(cmd)| cmd.decode(result)
+	decode = |result, Cmd.(cmd)| (cmd.decode)(result)
 
 	with_decode : Cmd(_, _), (Result -> Try(a, err)) -> Cmd(a, err)
 	with_decode = |Cmd.(cmd), fn| Cmd.(
@@ -77,7 +77,7 @@ Cmd(a, err) :: Params({ decode : Result -> Try(a, err) }, []).{
 			kind: cmd.kind,
 			limit: cmd.limit,
 			bindings: cmd.bindings,
-			decode: |res| cmd.decode(res).map_ok(fn),
+			decode: |res| (cmd.decode)(res).map_ok(fn),
 		},
 	)
 

@@ -56,12 +56,10 @@ Bytes :: [].{
 		u8 : Decode(U8, [UnexpectedEnd, ..])
 		u8 = Decode.(
 			|bytes| match bytes {
-				[byte, ..] => Ok(
-					{
-						decoded: byte,
-						remaining: bytes.drop_first(1),
-					},
-				)
+				[byte, ..] => Ok({
+					decoded: byte,
+					remaining: bytes.drop_first(1),
+				})
 				_ => Err(UnexpectedEnd)
 			},
 		)
@@ -69,13 +67,11 @@ Bytes :: [].{
 		u16 : Decode(U16, [UnexpectedEnd, ..])
 		u16 = Decode.(
 			|bytes| match bytes {
-				[b0, b1, ..] => Ok(
-					{
-						decoded: b0.to_u16().shift_left_by(8)
-							.bitwise_or(b1.to_u16()),
-						remaining: bytes.drop_first(2),
-					},
-				)
+				[b0, b1, ..] => Ok({
+					decoded: b0.to_u16().shift_left_by(8)
+						.bitwise_or(b1.to_u16()),
+					remaining: bytes.drop_first(2),
+				})
 				_ => Err(UnexpectedEnd)
 			},
 		)
@@ -83,15 +79,13 @@ Bytes :: [].{
 		u32 : Decode(U32, [UnexpectedEnd, ..])
 		u32 = Decode.(
 			|bytes| match bytes {
-				[b0, b1, b2, b3, ..] => Ok(
-					{
-						decoded: b0.to_u32().shift_left_by(24)
-							.bitwise_or(b1.to_u32().shift_left_by(16))
-							.bitwise_or(b2.to_u32().shift_left_by(8))
-							.bitwise_or(b3.to_u32()),
-						remaining: bytes.drop_first(4),
-					},
-				)
+				[b0, b1, b2, b3, ..] => Ok({
+					decoded: b0.to_u32().shift_left_by(24)
+						.bitwise_or(b1.to_u32().shift_left_by(16))
+						.bitwise_or(b2.to_u32().shift_left_by(8))
+						.bitwise_or(b3.to_u32()),
+					remaining: bytes.drop_first(4),
+				})
 				_ => Err(UnexpectedEnd)
 			},
 		)
@@ -99,19 +93,17 @@ Bytes :: [].{
 		u64 : Decode(U64, [UnexpectedEnd, ..])
 		u64 = Decode.(
 			|bytes| match bytes {
-				[b0, b1, b2, b3, b4, b5, b6, b7, ..] => Ok(
-					{
-						decoded: b0.to_u64().shift_left_by(56)
-							.bitwise_or(b1.to_u64().shift_left_by(48))
-							.bitwise_or(b2.to_u64().shift_left_by(40))
-							.bitwise_or(b3.to_u64().shift_left_by(32))
-							.bitwise_or(b4.to_u64().shift_left_by(24))
-							.bitwise_or(b5.to_u64().shift_left_by(16))
-							.bitwise_or(b6.to_u64().shift_left_by(8))
-							.bitwise_or(b7.to_u64()),
-						remaining: bytes.drop_first(8),
-					},
-				)
+				[b0, b1, b2, b3, b4, b5, b6, b7, ..] => Ok({
+					decoded: b0.to_u64().shift_left_by(56)
+						.bitwise_or(b1.to_u64().shift_left_by(48))
+						.bitwise_or(b2.to_u64().shift_left_by(40))
+						.bitwise_or(b3.to_u64().shift_left_by(32))
+						.bitwise_or(b4.to_u64().shift_left_by(24))
+						.bitwise_or(b5.to_u64().shift_left_by(16))
+						.bitwise_or(b6.to_u64().shift_left_by(8))
+						.bitwise_or(b7.to_u64()),
+					remaining: bytes.drop_first(8),
+				})
 				_ => Err(UnexpectedEnd)
 			},
 		)
@@ -159,24 +151,20 @@ Bytes :: [].{
 		bool : Decode(Bool, [UnexpectedEnd, ..])
 		bool = Decode.(
 			|bytes| match bytes {
-				[byte, ..] => Ok(
-					{
-						decoded: byte == 1,
-						remaining: bytes.drop_first(1),
-					},
-				)
+				[byte, ..] => Ok({
+					decoded: byte == 1,
+					remaining: bytes.drop_first(1),
+				})
 				_ => Err(UnexpectedEnd)
 			},
 		)
 
 		succeed : value -> Decode(value, err)
 		succeed = |value| Decode.(
-			|bytes| Ok(
-				{
-					decoded: value,
-					remaining: bytes,
-				},
-			),
+			|bytes| Ok({
+				decoded: value,
+				remaining: bytes,
+			}),
 		)
 
 		fail : err -> Decode(value, err)
