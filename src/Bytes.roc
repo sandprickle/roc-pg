@@ -68,7 +68,7 @@ Bytes :: [].{
 		u16 = Decode.(
 			|bytes| match bytes {
 				[b0, b1, ..] => Ok({
-					decoded: b0.to_u16().shift_left_by(8)
+					decoded: b0.to_u16().shl_wrap(8)
 						.bitwise_or(b1.to_u16()),
 					remaining: bytes.drop_first(2),
 				})
@@ -80,9 +80,9 @@ Bytes :: [].{
 		u32 = Decode.(
 			|bytes| match bytes {
 				[b0, b1, b2, b3, ..] => Ok({
-					decoded: b0.to_u32().shift_left_by(24)
-						.bitwise_or(b1.to_u32().shift_left_by(16))
-						.bitwise_or(b2.to_u32().shift_left_by(8))
+					decoded: b0.to_u32().shl_wrap(24)
+						.bitwise_or(b1.to_u32().shl_wrap(16))
+						.bitwise_or(b2.to_u32().shl_wrap(8))
 						.bitwise_or(b3.to_u32()),
 					remaining: bytes.drop_first(4),
 				})
@@ -94,13 +94,13 @@ Bytes :: [].{
 		u64 = Decode.(
 			|bytes| match bytes {
 				[b0, b1, b2, b3, b4, b5, b6, b7, ..] => Ok({
-					decoded: b0.to_u64().shift_left_by(56)
-						.bitwise_or(b1.to_u64().shift_left_by(48))
-						.bitwise_or(b2.to_u64().shift_left_by(40))
-						.bitwise_or(b3.to_u64().shift_left_by(32))
-						.bitwise_or(b4.to_u64().shift_left_by(24))
-						.bitwise_or(b5.to_u64().shift_left_by(16))
-						.bitwise_or(b6.to_u64().shift_left_by(8))
+					decoded: b0.to_u64().shl_wrap(56)
+						.bitwise_or(b1.to_u64().shl_wrap(48))
+						.bitwise_or(b2.to_u64().shl_wrap(40))
+						.bitwise_or(b3.to_u64().shl_wrap(32))
+						.bitwise_or(b4.to_u64().shl_wrap(24))
+						.bitwise_or(b5.to_u64().shl_wrap(16))
+						.bitwise_or(b6.to_u64().shl_wrap(8))
 						.bitwise_or(b7.to_u64()),
 					remaining: bytes.drop_first(8),
 				})
@@ -201,18 +201,18 @@ Bytes :: [].{
 
 sized : int, U8 -> List(U8)
 	where [
-		int.shift_right_by : int, U8 -> int,
+		int.shr_zf_wrap : int, U8 -> int,
 		int.to_u8_wrap : int -> U8,
 	]
 sized = |value, size| sized_help(value, (size - 8), [])
 
 sized_help : int, U8, List(U8) -> List(U8)
 	where [
-		int.shift_right_by : int, U8 -> int,
+		int.shr_zf_wrap : int, U8 -> int,
 		int.to_u8_wrap : int -> U8,
 	]
 sized_help = |value, offset, collected| {
-	part = value.shift_right_by(offset).to_u8_wrap()
+	part = value.shr_zf_wrap(offset).to_u8_wrap()
 	added = collected.append(part)
 
 	if offset == 0 {
