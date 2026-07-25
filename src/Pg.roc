@@ -1,4 +1,4 @@
-import Result
+import Result as InternalResult
 import Cmd as InternalCmd
 import Batch as InternalBatch
 import ProtocolBackend
@@ -7,16 +7,11 @@ import Bytes
 
 Pg :: [].{
 
-	# Result : InternalResult
+	Result : InternalResult
 
 	Cmd(a, err) :: InternalCmd(a, err).{
 
-		# send! : Client(tcp_stream), Cmd(a, err) => Try(a, _)
-		# 	where [
-		# 		tcp_stream.write! : tcp_stream, List(U8) => Try({}, _),
-		# 		tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _),
-		# 	]
-		# send! = |client, cmd| Client.command!(client, cmd)
+		send! = |cmd, client| Client.command!(client, cmd)
 
 		new : Str -> Cmd(Result, [])
 		new = |sql| Cmd.(InternalCmd.from_sql(sql))
@@ -128,6 +123,8 @@ Pg :: [].{
 		sequence = |cmds| Batch.(
 			InternalBatch.sequence(cmds.map(|Cmd.(cmd)| cmd)),
 		)
+
+		send! = |batch, client| Client.batch!(client, batch)
 	}
 
 	Client(tcp_stream) :: {
@@ -137,19 +134,16 @@ Pg :: [].{
 		Error : ProtocolBackend.Error
 
 		connect! : {
-			host : Str,
-			port : U16,
+			stream : tcp_stream,
 			user : Str,
 			auth : [None, Password(Str)],
 			database : Str,
-			tcp_connect! : Str, U16 => Try(tcp_stream, _),
 		} => Try(Client, _)
 			where [
 				tcp_stream.write! : tcp_stream, List(U8) => Try({}, _),
 				tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _),
 			]
-		connect! = |{ host, port, user, auth, database, tcp_connect! }| {
-			stream = tcp_connect!(host, port)?
+		connect! = |{ stream, user, auth, database }| {
 			stream.write!(ProtocolFrontend.startup({ user, database }))?
 
 			message_loop!(
@@ -546,7 +540,7 @@ loop! : state, (state => Try([Step(state), Done(done)], err)) => Try(done, err)
 loop! = |state, fn!| match fn!(state) {
 	Err(err) => Err(err)
 	Ok(Done(done)) => Ok(done)
-	Ok(Step(next)) => loop!(next, fn!)
+	Ok(Step(next_state)) => loop!(next_state, fn!)
 }
 
 message_loop! : tcp_stream,
