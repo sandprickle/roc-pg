@@ -1,5 +1,4 @@
 import ProtocolBackend
-import Util exposing [map_try]
 
 Result :: {
 	fields : List(RowField),
@@ -28,7 +27,7 @@ Result :: {
 	decode : Result, Decode(a, err) -> Try(List(a), [FieldNotFound(Str), ..err])
 	decode = |Result.(r), Decode.(get_decode)|
 		match get_decode(r.fields) {
-			Ok(fn) => map_try(r.rows, fn)
+			Ok(fn) => r.rows.map_try(fn)
 			Err(FieldNotFound(name)) => Err(FieldNotFound(name))
 		}
 
