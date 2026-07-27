@@ -1,8 +1,7 @@
 import Result as InternalResult
 import Cmd as InternalCmd
 import Batch as InternalBatch
-import ProtocolBackend
-import ProtocolFrontend
+import Protocol
 import Bytes
 
 Pg :: [].{
@@ -35,7 +34,7 @@ Pg :: [].{
 			),
 		)
 
-		map : Cmd(_, _), (_ -> _) -> Cmd(_, _)
+		map : Cmd(a, err), (a -> b) -> Cmd(b, err)
 		map = |Cmd.(cmd), f| Cmd.(cmd.map(f))
 
 		with_custom_decode : Cmd(_, _), (Result -> Try(_, _)) -> Cmd(_, _)
@@ -128,10 +127,10 @@ Pg :: [].{
 	}
 
 	Client(tcp_stream) :: {
-		backend_key : Try(ProtocolBackend.KeyData, [Pending]),
+		backend_key : Try(Protocol.Backend.KeyData, [Pending]),
 		stream : tcp_stream,
 	}.{
-		Error : ProtocolBackend.Error
+		Error : Protocol.Backend.Error
 
 		connect! : {
 			stream : tcp_stream,
@@ -144,7 +143,7 @@ Pg :: [].{
 				tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _),
 			]
 		connect! = |{ stream, user, auth, database }| {
-			stream.write!(ProtocolFrontend.startup({ user, database }))?
+			stream.write!(Protocol.Frontend.startup({ user, database }))?
 
 			message_loop!(
 				stream,
@@ -159,7 +158,7 @@ Pg :: [].{
 						None => Err(PasswordRequired)
 						Password(pwd) => {
 							stream.write!(
-								ProtocolFrontend.password_message(pwd),
+								Protocol.Frontend.password_message(pwd),
 							)?
 							next(state)
 						}
@@ -214,34 +213,34 @@ Pg :: [].{
 			init = match kind {
 				SqlCmd(sql) => {
 					messages: Bytes.Encode.sequence([
-						ProtocolFrontend.parse({
+						Protocol.Frontend.parse({
 							sql,
 							name: "",
 							param_type_ids: [],
 						}),
-						ProtocolFrontend.bind({
+						Protocol.Frontend.bind({
 							format_codes,
 							param_values,
 							portal: "",
 							prepared_statement: "",
 							column_format_codes: [],
 						}),
-						ProtocolFrontend.describe_portal(""),
-						ProtocolFrontend.execute({ limit, portal: "" }),
+						Protocol.Frontend.describe_portal(""),
+						Protocol.Frontend.execute({ limit, portal: "" }),
 					]),
 					fields: [],
 				}
 
 				PreparedCmd(prepared) => {
 					messages: Bytes.Encode.sequence([
-						ProtocolFrontend.bind({
+						Protocol.Frontend.bind({
 							format_codes,
 							param_values,
 							portal: "",
 							prepared_statement: prepared.name,
 							column_format_codes: [],
 						}),
-						ProtocolFrontend.execute({ limit, portal: "" }),
+						Protocol.Frontend.execute({ limit, portal: "" }),
 					]),
 					fields: prepared.fields,
 				}
@@ -295,7 +294,7 @@ Pg :: [].{
 				->Bytes.Encode.sequence()
 
 			close_messages = reused_indexes.to_list().map(
-				|ix| ProtocolFrontend.close_statement(
+				|ix| Protocol.Frontend.close_statement(
 					InternalBatch.reuse_name(ix),
 				),
 			)->Bytes.Encode.sequence()
@@ -332,9 +331,9 @@ Pg :: [].{
 			]
 		prepare! = |Client.({ stream, .. }), { name, sql }| {
 			parse_and_describe = Bytes.Encode.sequence([
-				ProtocolFrontend.parse({ name, sql, param_type_ids: [] }),
-				ProtocolFrontend.describe_statement(name),
-				ProtocolFrontend.sync,
+				Protocol.Frontend.parse({ name, sql, param_type_ids: [] }),
+				Protocol.Frontend.describe_statement(name),
+				Protocol.Frontend.sync,
 			])
 
 			stream.write!(parse_and_describe)?
@@ -434,16 +433,16 @@ init_batched_cmd = |reused_indexes, cmd, cmd_index| {
 
 			{
 				messages: Bytes.Encode.sequence([
-					ProtocolFrontend.parse({ sql, name, param_type_ids: [] }),
-					ProtocolFrontend.bind({
+					Protocol.Frontend.parse({ sql, name, param_type_ids: [] }),
+					Protocol.Frontend.bind({
 						format_codes,
 						param_values,
 						prepared_statement: name,
 						portal: "",
 						column_format_codes: [],
 					}),
-					ProtocolFrontend.describe_portal(""),
-					ProtocolFrontend.execute({ limit: cmd.limit, portal: "" }),
+					Protocol.Frontend.describe_portal(""),
+					Protocol.Frontend.execute({ limit: cmd.limit, portal: "" }),
 				]),
 				fields: Describe,
 			}
@@ -451,28 +450,28 @@ init_batched_cmd = |reused_indexes, cmd, cmd_index| {
 
 		ReuseSql(index) => {
 			messages: Bytes.Encode.sequence([
-				ProtocolFrontend.bind({
+				Protocol.Frontend.bind({
 					format_codes,
 					param_values,
 					prepared_statement: InternalBatch.reuse_name(index),
 					portal: "",
 					column_format_codes: [],
 				}),
-				ProtocolFrontend.execute({ limit: cmd.limit, portal: "" }),
+				Protocol.Frontend.execute({ limit: cmd.limit, portal: "" }),
 			]),
 			fields: ReuseFrom(index),
 		}
 
 		PreparedCmd(prepared) => {
 			messages: Bytes.Encode.sequence([
-				ProtocolFrontend.bind({
+				Protocol.Frontend.bind({
 					format_codes,
 					param_values,
 					prepared_statement: prepared.name,
 					portal: "",
 					column_format_codes: [],
 				}),
-				ProtocolFrontend.execute({ limit: cmd.limit, portal: "" }),
+				Protocol.Frontend.execute({ limit: cmd.limit, portal: "" }),
 			]),
 			fields: Known(prepared.fields),
 		}
@@ -517,7 +516,7 @@ batched_cmd_fields = |results, fields_method|
 		Known(fields) => Ok(fields)
 	}
 
-read_message! : tcp_stream => Try(ProtocolBackend.Message, _)
+read_message! : tcp_stream => Try(Protocol.Backend.Message, _)
 	where [tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _)]
 read_message! = |stream| {
 	header_bytes = stream.read_exactly!(5)?
@@ -525,14 +524,14 @@ read_message! = |stream| {
 	proto_decode = |bytes, dec|
 		Bytes.Decode.decode(bytes, dec).map_err(|e| PgProtoErr(e))
 
-	meta = header_bytes->proto_decode(ProtocolBackend.header)?
+	meta = header_bytes->proto_decode(Protocol.Backend.header)?
 
 	if meta.len > 0 {
 		len_u64 = meta.len.to_u64_try().ok_or(1)
 		payload = stream.read_exactly!(len_u64)?
-		proto_decode(payload, ProtocolBackend.message(meta.msg_type))
+		proto_decode(payload, Protocol.Backend.message(meta.msg_type))
 	} else {
-		proto_decode([], ProtocolBackend.message(meta.msg_type))
+		proto_decode([], Protocol.Backend.message(meta.msg_type))
 	}
 }
 
@@ -546,7 +545,7 @@ loop! = |state, fn!| match fn!(state) {
 message_loop! : tcp_stream,
 state,
 (
-	ProtocolBackend.Message,
+	Protocol.Backend.Message,
 	state => Try(
 		[
 			Done(done),
@@ -573,7 +572,7 @@ send_with_sync! : tcp_stream, List(U8) => Try({}, _)
 	where [tcp_stream.write! : tcp_stream, List(U8) => Try({}, _)]
 send_with_sync! = |stream, bytes|
 	stream.write!(
-		Bytes.Encode.sequence([bytes, ProtocolFrontend.sync]),
+		Bytes.Encode.sequence([bytes, Protocol.Frontend.sync]),
 	)
 
 get_bytes = |num| match num {
@@ -583,7 +582,7 @@ get_bytes = |num| match num {
 	_ => [0]
 }
 
-read_cmd_result! : List(ProtocolBackend.RowField), tcp_stream => Try(Result, _)
+read_cmd_result! : List(Protocol.Backend.RowField), tcp_stream => Try(Result, _)
 	where [tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _)]
 read_cmd_result! = |init_fields, stream|
 	message_loop!(
