@@ -225,16 +225,15 @@ sized_help = |value, offset, collected| {
 Step(state, a) : [Loop(state), Done(a)]
 
 loop_help : (state -> Decode(Step(state, a), err)), state, List(U8) -> _
-loop_help = |step, state, bytes|
-# TODO: Destructuring return value of step(state) should work
-	match step(state) {
-		Decode.(loop_help_decoder) => {
-			{ decoded, remaining } = loop_help_decoder(bytes)?
-			match decoded {
-				Loop(new_state) =>
-					loop_help(step, new_state, remaining)
-				Done(result) =>
-					Ok({ decoded: result, remaining })
-				}
+loop_help = |step, state, bytes| {
+	Decode.(loop_help_decoder) = step(state)
+
+	{ decoded, remaining } = loop_help_decoder(bytes)?
+
+	match decoded {
+		Loop(new_state) =>
+			loop_help(step, new_state, remaining)
+		Done(result) =>
+			Ok({ decoded: result, remaining })
 		}
-	}
+}
