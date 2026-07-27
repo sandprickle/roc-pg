@@ -61,7 +61,7 @@ Cmd(a, err) :: Params({ decode : Result -> Try(a, err) }, []).{
 	decode : Result, Cmd(a, err) -> Try(a, err)
 	decode = |result, Cmd.(cmd)| (cmd.decode)(result)
 
-	with_decode : Cmd(_, _), (Result -> Try(a, err)) -> Cmd(a, err)
+	with_decode : Cmd(a, err_a), (Result -> Try(b, err_b)) -> Cmd(b, err_b)
 	with_decode = |Cmd.(cmd), fn| Cmd.(
 		{
 			kind: cmd.kind,

@@ -1,6 +1,5 @@
 import Cmd
 import Result
-import Util exposing [map_try]
 
 Batch(a, err) :: Params(
 	{
@@ -18,7 +17,7 @@ Batch(a, err) :: Params(
 	reuse_name : U64 -> Str
 	reuse_name = |index| "b[${index.to_str()}]"
 
-	succeed : _ -> Batch(_, _)
+	succeed : a -> Batch(a, err)
 	succeed = |value| Batch.(
 		{
 			commands: List.with_capacity(5),
@@ -69,7 +68,7 @@ Batch(a, err) :: Params(
 				results,
 				cmds,
 				Cmd.decode,
-			)->map_try(|r| r),
+			).map_try(|r| r),
 		).map_ok(|value| { value, rest: [] })
 			.map_err(|e| ExpectErr(e))
 
@@ -82,7 +81,7 @@ Batch(a, err) :: Params(
 		)
 	}
 
-	# params : Batch(a, err) -> _
+	params : Batch(a, err) -> _
 	params = |Batch.(batch)| batch
 }
 
