@@ -115,7 +115,7 @@ add_cmd = |batch, cmd| {
 			Err(KeyNotFound) => {
 				entry = { index: new_index, reused: Bool.False }
 				seen_sql = batch.seen_sql.insert(sql, entry)
-				new_cmd = SqlCmd(sql)->batched_cmd(cmd_params)
+				new_cmd = SqlCmd(sql) |> batched_cmd(cmd_params)
 
 				{ seen_sql, new_cmd, new_index }
 			}
@@ -128,14 +128,14 @@ add_cmd = |batch, cmd| {
 					batch.seen_sql.insert(sql, entry)
 				}
 
-				new_cmd = ReuseSql(index)->batched_cmd(cmd_params)
+				new_cmd = ReuseSql(index) |> batched_cmd(cmd_params)
 
 				{ seen_sql, new_cmd, new_index }
 			}
 		}
 
 		PreparedCmd(prep) => {
-			new_cmd = PreparedCmd(prep)->batched_cmd(cmd_params)
+			new_cmd = PreparedCmd(prep) |> batched_cmd(cmd_params)
 			{ seen_sql: batch.seen_sql, new_cmd, new_index }
 		}
 	}

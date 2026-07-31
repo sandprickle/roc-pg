@@ -1,5 +1,5 @@
 app [main!] {
-	pf: platform "https://github.com/niclas-ahden/basic-cli/releases/download/0.22.1/DobkAk7zNyqAgqh2Riaj5c5DtWtKhd5iVYE5RFa6izcd.tar.zst",
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.21.0/4rAQg8kUYZ3Vksr4qMQHpaFYNiHSn9GgS7gVxghd1XYV.tar.zst",
 	pg: "../src/main.roc",
 }
 
@@ -10,7 +10,7 @@ import pg.Result
 
 main! = |_| {
 	client = Pg.Client.connect!({
-		stream: Tcp.connect!("localhost", 5432)?,
+		stream: Tcp.connect!("localhost", 5432, 10_000)?,
 		user: "postgres",
 		auth: None,
 		database: "postgres",
@@ -39,20 +39,19 @@ main! = |_| {
 	str42 = result.forty_two.to_str()
 	Stdout.line!("${result.hi} ${str42}")?
 
-	result_seq = 
-		Pg.Batch.sequence(
-			List.from_iter(0..=20)
-				.map(
-					|num|
-						Pg.Cmd.new("select $1::int as value")
-							.bind([Pg.Cmd.u8(num)])
-							.expect_1(Result.u8("value")),
-				),
-		).send!(client)?
+	result_seq = Pg.Batch.sequence(
+		List.from_iter(0..=20)
+			.map(
+				|num|
+					Pg.Cmd.new("select $1::int as value")
+						.bind([Pg.Cmd.u8(num)])
+						.expect_1(Result.u8("value")),
+			),
+	).send!(client)?
 
 	result_seq_str = result_seq
 		.map(|num| num.to_str())
-		->Str.join_with(", ")
+		|> Str.join_with(", ")
 
 	Stdout.line!(result_seq_str)?
 

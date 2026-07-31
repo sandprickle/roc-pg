@@ -7,17 +7,21 @@ Protocol :: [].{
 		FormatCode : [Text, Binary]
 
 		startup : { user : Str, database : Str } -> List(U8)
-		startup = |{ user, database }| Encode.sequence([
+		startup = |{ user, database }| [
 			# Version number
 			Encode.i16(3),
 			Encode.i16(0),
 			# Encoding
-			Encode.sequence([
+			[
 				encode_param("client_encoding", "utf_8"),
 				encode_param("user", user),
 				encode_param("database", database),
-			])->Encode.null_terminate(),
-		])->prepend_length()
+			]
+				|> Encode.sequence
+				|> Encode.null_terminate,
+		]
+			|> Encode.sequence
+			|> prepend_length
 
 		password_message : Str -> List(U8)
 		password_message = |pwd| encode_message('p', [Encode.c_str(pwd)])
@@ -294,47 +298,54 @@ notice_response = Decode.await(
 # TODO
 error_response : Decode(Backend.Message, _)
 error_response = known_str_fields.await(
-	|dict| 'S'->required_field(
-		dict,
-		|localized_severity| 'V'->optional_field_with(
+	|dict| 'S'
+		|> required_field(
 			dict,
-			decode_severity,
-			|severity| 'C'->required_field(
-				dict,
-				|code| 'M'->required_field(
+			|localized_severity| 'V'
+				|> optional_field_with(
 					dict,
-					|msg| 'P'->optional_field_with(
-						dict,
-						U32.from_str,
-						|position| 'p'->optional_field_with(
+					decode_severity,
+					|severity| 'C'
+						|> required_field(
 							dict,
-							U32.from_str,
-							|internal_position| ErrorResponse({
-								localized_severity,
-								severity,
-								code,
-								message: msg,
-								detail: 'D'->optional_field(dict),
-								hint: 'H'->optional_field(dict),
-								position,
-								internal_position,
-								internal_query: 'q'->optional_field(dict),
-								ewhere: 'W'->optional_field(dict),
-								schema_name: 's'->optional_field(dict),
-								table_name: 't'->optional_field(dict),
-								column_name: 'c'->optional_field(dict),
-								data_type_name: 'd'->optional_field(dict),
-								constraint_name: 'n'->optional_field(dict),
-								file: 'F'->optional_field(dict),
-								line: 'L'->optional_field(dict),
-								routine: 'R'->optional_field(dict),
-							})->Decode.succeed(),
+							|code| 'M'
+								|> required_field(
+									dict,
+									|msg| 'P'
+										|> optional_field_with(
+											dict,
+											U32.from_str,
+											|position| 'p'
+												|> optional_field_with(
+													dict,
+													U32.from_str,
+													|internal_position| ErrorResponse({
+														localized_severity,
+														severity,
+														code,
+														message: msg,
+														detail: 'D' |> optional_field(dict),
+														hint: 'H' |> optional_field(dict),
+														position,
+														internal_position,
+														internal_query: 'q' |> optional_field(dict),
+														ewhere: 'W' |> optional_field(dict),
+														schema_name: 's' |> optional_field(dict),
+														table_name: 't' |> optional_field(dict),
+														column_name: 'c' |> optional_field(dict),
+														data_type_name: 'd' |> optional_field(dict),
+														constraint_name: 'n' |> optional_field(dict),
+														file: 'F' |> optional_field(dict),
+														line: 'L' |> optional_field(dict),
+														routine: 'R' |> optional_field(dict),
+													})
+														|> Decode.succeed,
+												),
+										),
+								),
 						),
-					),
 				),
-			),
 		),
-	),
 )
 
 optional_field = |field_id, dict|
@@ -397,7 +408,7 @@ known_str_fields = Decode.loop(
 		Decode.u8,
 		|field_id| if field_id == 0 Decode.succeed(Done(collected)) else Decode.map(
 			Decode.c_str,
-			|value| collected->Dict.insert(field_id, value)->Loop,
+			|value| collected |> Dict.insert(field_id, value) |> Loop,
 		),
 	),
 )
@@ -407,9 +418,10 @@ parameter_description = Decode.await(
 	Decode.i16,
 	|field_count|
 		if field_count == 0 Decode.succeed(ParameterDescription([]))
-		else fixed_list(field_count, parameter_field)->Decode.map(
-			|d| ParameterDescription(d),
-		),
+		else fixed_list(field_count, parameter_field)
+			|> Decode.map(
+				|d| ParameterDescription(d),
+			),
 )
 
 parameter_field : Decode(Backend.ParameterField, _)
@@ -419,11 +431,11 @@ parameter_field = Decode.await(
 )
 
 row_description : Decode(Backend.Message, _)
-row_description = 
+row_description =
 	Decode.await(
 		Decode.i16,
 		|field_count|
-			fixed_list(field_count, row_field)->Decode.map(|d| RowDescription(d)),
+			fixed_list(field_count, row_field) |> Decode.map(|d| RowDescription(d)),
 	)
 
 row_field : Decode(Backend.RowField, _)
@@ -435,7 +447,7 @@ row_field = Decode.c_str.await(
 					|data_type_size| Decode.i32.await(
 						|type_modifier| Decode.i16.map(
 							|fmt_code| {
-								column = 
+								column =
 									if table_oid != 0 and attribute_number != 0
 										Ok({ table_oid, attribute_number })
 									else
@@ -471,7 +483,8 @@ data_row = Decode.await(
 				else
 					Decode.take(value_len.to_u64_wrap(), |x| x),
 		),
-	)->Decode.map(|r| DataRow(r)),
+	)
+		|> Decode.map(|r| DataRow(r)),
 )
 
 fixed_list = |count, item_decode| Decode.loop(

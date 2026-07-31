@@ -34,7 +34,7 @@ Bytes :: [].{
 		# Strings
 
 		c_str : Str -> List(U8)
-		c_str = |value| value.to_utf8()->null_terminate()
+		c_str = |value| value.to_utf8() |> null_terminate
 
 		null_terminate : List(U8) -> List(U8)
 		null_terminate = |bytes| bytes.append(0)

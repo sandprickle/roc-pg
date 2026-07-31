@@ -1,6 +1,11 @@
-import ProtocolFrontend exposing [FormatCode]
-import ProtocolBackend exposing [RowField, ParameterField]
+import Protocol
 import Result
+
+FormatCode : Protocol.Frontend.FormatCode
+
+RowField : Protocol.Backend.RowField
+
+ParameterField : Protocol.Backend.ParameterField
 
 Limit : [None, Limit(I32)]
 

@@ -4,6 +4,8 @@ import Batch as InternalBatch
 import Protocol
 import Bytes
 
+tcp_timeout = 5_000
+
 Pg :: [].{
 
 	Result : InternalResult
@@ -49,7 +51,8 @@ Pg :: [].{
 					n = index + 1
 					"$${n.to_str()} = ${inspect_binding(val)}"
 				},
-			)->Str.join_with("\n")
+			)
+				|> Str.join_with("\n")
 
 			"${kind_str}\n${bindings_str}"
 		}
@@ -139,11 +142,14 @@ Pg :: [].{
 			database : Str,
 		} => Try(Client, _)
 			where [
-				tcp_stream.write! : tcp_stream, List(U8) => Try({}, _),
-				tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _),
+				tcp_stream.write! : tcp_stream, List(U8), U64 => Try({}, _),
+				tcp_stream.read_exactly! : tcp_stream, U64, U64 => Try(List(U8), _),
 			]
 		connect! = |{ stream, user, auth, database }| {
-			stream.write!(Protocol.Frontend.startup({ user, database }))?
+			stream.write!(
+				Protocol.Frontend.startup({ user, database }),
+				tcp_timeout,
+			)?
 
 			message_loop!(
 				stream,
@@ -159,6 +165,7 @@ Pg :: [].{
 						Password(pwd) => {
 							stream.write!(
 								Protocol.Frontend.password_message(pwd),
+								tcp_timeout,
 							)?
 							next(state)
 						}
@@ -203,8 +210,8 @@ Pg :: [].{
 		)
 
 			where [
-				tcp_stream.write! : tcp_stream, List(U8) => Try({}, _),
-				tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _),
+				tcp_stream.write! : tcp_stream, List(U8), U64 => Try({}, _),
+				tcp_stream.read_exactly! : tcp_stream, U64, U64 => Try(List(U8), _),
 			]
 		command! = |Client.({ stream, backend_key: _ }), Cmd.(cmd)| {
 			{ kind, limit, bindings } = cmd.params()
@@ -271,8 +278,8 @@ Pg :: [].{
 			],
 		)
 			where [
-				tcp_stream.write! : tcp_stream, List(U8) => Try({}, _),
-				tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _),
+				tcp_stream.write! : tcp_stream, List(U8), U64 => Try({}, _),
+				tcp_stream.read_exactly! : tcp_stream, U64, U64 => Try(List(U8), _),
 			]
 		batch! = |Client.({ stream, .. }), Batch.(cmd_batch)| {
 			{ commands, seen_sql, decode: batch_decode } = cmd_batch.params()
@@ -291,13 +298,14 @@ Pg :: [].{
 				init_batched_cmd(reused_indexes, cmd, ix))
 
 			command_messages = inits.map(|init| init.messages)
-				->Bytes.Encode.sequence()
+				|> Bytes.Encode.sequence
 
 			close_messages = reused_indexes.to_list().map(
 				|ix| Protocol.Frontend.close_statement(
 					InternalBatch.reuse_name(ix),
 				),
-			)->Bytes.Encode.sequence()
+			)
+				|> Bytes.Encode.sequence
 
 			messages = command_messages.concat(close_messages)
 
@@ -326,8 +334,8 @@ Pg :: [].{
 			],
 		)
 			where [
-				tcp_stream.write! : tcp_stream, List(U8) => Try({}, _),
-				tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _),
+				tcp_stream.write! : tcp_stream, List(U8), U64 => Try({}, _),
+				tcp_stream.read_exactly! : tcp_stream, U64, U64 => Try(List(U8), _),
 			]
 		prepare! = |Client.({ stream, .. }), { name, sql }| {
 			parse_and_describe = Bytes.Encode.sequence([
@@ -336,7 +344,7 @@ Pg :: [].{
 				Protocol.Frontend.sync,
 			])
 
-			stream.write!(parse_and_describe)?
+			stream.write!(parse_and_describe, tcp_timeout)?
 
 			message_loop!(
 				stream,
@@ -373,25 +381,25 @@ Pg :: [].{
 			}
 
 			fields_str = ""
-				->add_field("Detail", err.detail)
-				->add_field("Hint", err.hint)
-				->add_field(
+				|> add_field("Detail", err.detail)
+				|> add_field("Hint", err.hint)
+				|> add_field(
 					"Position",
 					err.position.map_ok(|pos| pos.to_str()),
 				)
-				->add_field(
+				|> add_field(
 					"Internal Position",
 					err.internal_position.map_ok(|pos| pos.to_str()),
 				)
-				->add_field("Internal Query", err.internal_query)
-				->add_field("Where", err.ewhere)
-				->add_field("Schema", err.schema_name)
-				->add_field("Table", err.table_name)
-				->add_field("Data type", err.data_type_name)
-				->add_field("Constraint", err.constraint_name)
-				->add_field("File", err.file)
-				->add_field("Line", err.line)
-				->add_field("Routine", err.line)
+				|> add_field("Internal Query", err.internal_query)
+				|> add_field("Where", err.ewhere)
+				|> add_field("Schema", err.schema_name)
+				|> add_field("Table", err.table_name)
+				|> add_field("Data type", err.data_type_name)
+				|> add_field("Constraint", err.constraint_name)
+				|> add_field("File", err.file)
+				|> add_field("Line", err.line)
+				|> add_field("Routine", err.line)
 
 			"${err.localized_severity} (${err.code}): ${err.message}\n${fields_str}"
 				.trim()
@@ -408,7 +416,7 @@ inspect_kind = |kind| match kind {
 inspect_binding = |binding| match binding {
 	Null => "NULL"
 	Text(text) => text
-	Binary(bin) => bin.map(|b| b.to_str())->Str.join_with(",")
+	Binary(bin) => bin.map(|b| b.to_str()) |> Str.join_with(",")
 }
 
 init_batched_cmd : Set(U64),
@@ -426,7 +434,7 @@ init_batched_cmd = |reused_indexes, cmd, cmd_index| {
 
 	match cmd.kind {
 		SqlCmd(sql) => {
-			name = 
+			name =
 				if reused_indexes.contains(cmd_index)
 					InternalBatch.reuse_name(cmd_index)
 				else ""
@@ -517,18 +525,18 @@ batched_cmd_fields = |results, fields_method|
 	}
 
 read_message! : tcp_stream => Try(Protocol.Backend.Message, _)
-	where [tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _)]
+	where [tcp_stream.read_exactly! : tcp_stream, U64, U64 => Try(List(U8), _)]
 read_message! = |stream| {
-	header_bytes = stream.read_exactly!(5)?
+	header_bytes = stream.read_exactly!(5, tcp_timeout)?
 
 	proto_decode = |bytes, dec|
 		Bytes.Decode.decode(bytes, dec).map_err(|e| PgProtoErr(e))
 
-	meta = header_bytes->proto_decode(Protocol.Backend.header)?
+	meta = proto_decode(header_bytes, Protocol.Backend.header)?
 
 	if meta.len > 0 {
 		len_u64 = meta.len.to_u64_try().ok_or(1)
-		payload = stream.read_exactly!(len_u64)?
+		payload = stream.read_exactly!(len_u64, tcp_timeout)?
 		proto_decode(payload, Protocol.Backend.message(meta.msg_type))
 	} else {
 		proto_decode([], Protocol.Backend.message(meta.msg_type))
@@ -553,7 +561,7 @@ state,
 		],
 		_,
 	)) => Try(done, _)
-		where [tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _)]
+		where [tcp_stream.read_exactly! : tcp_stream, U64, U64 => Try(List(U8), _)]
 message_loop! = |stream, init_state, step_fn!|
 	loop!(
 		init_state,
@@ -569,10 +577,11 @@ message_loop! = |stream, init_state, step_fn!|
 	)
 
 send_with_sync! : tcp_stream, List(U8) => Try({}, _)
-	where [tcp_stream.write! : tcp_stream, List(U8) => Try({}, _)]
+	where [tcp_stream.write! : tcp_stream, List(U8), U64 => Try({}, _)]
 send_with_sync! = |stream, bytes|
 	stream.write!(
 		Bytes.Encode.sequence([bytes, Protocol.Frontend.sync]),
+		tcp_timeout,
 	)
 
 get_bytes = |num| match num {
@@ -583,7 +592,7 @@ get_bytes = |num| match num {
 }
 
 read_cmd_result! : List(Protocol.Backend.RowField), tcp_stream => Try(Result, _)
-	where [tcp_stream.read_exactly! : tcp_stream, U64 => Try(List(U8), _)]
+	where [tcp_stream.read_exactly! : tcp_stream, U64, U64 => Try(List(U8), _)]
 read_cmd_result! = |init_fields, stream|
 	message_loop!(
 		stream,

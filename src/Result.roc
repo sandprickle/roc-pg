@@ -1,12 +1,12 @@
-import ProtocolBackend
+import Protocol
 
 Result :: {
 	fields : List(RowField),
 	rows : List(List(List(U8))),
 	parameters : List(ParameterField),
 }.{
-	RowField : ProtocolBackend.RowField
-	ParameterField : ProtocolBackend.ParameterField
+	RowField : Protocol.Backend.RowField
+	ParameterField : Protocol.Backend.ParameterField
 
 	create = |x| Result.(x)
 
